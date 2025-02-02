@@ -1,11 +1,12 @@
-let preview = {
-  // default values
+const preview = {
+  // default values for Readme Typing SVG parameters
   defaults: {
     font: "monospace",
     weight: "400",
     color: "36BCF7",
     background: "00000000",
     size: "20",
+    letterSpacing: "normal",
     center: "false",
     vCenter: "false",
     multiline: "false",
@@ -14,8 +15,16 @@ let preview = {
     duration: "5000",
     pause: "0",
     repeat: "true",
+    random: "false",
     separator: ";",
   },
+  // input field initial values that differ from the defaults
+  overrides: {
+    font: "Fira Code",
+    pause: "1000",
+    width: "435",
+  },
+  // dummy text for default line values
   dummyText: [
     "The five boxing wizards jump quickly",
     "How vexingly quick daft zebras jump",
@@ -25,10 +34,13 @@ let preview = {
     "Glib jocks quiz nymph to vex dwarf",
     "Jived fox nymph grabs quick waltz",
   ],
-  // update the preview
-  update: function () {
-    const copyButtons = document.querySelectorAll(".copy-button");
-    // get parameter values from all .param elements
+
+  /**
+   * Get the current parameters from the form
+   * @returns {object} The current parameters
+   */
+  getParams() {
+    // get all parameters from the .param fields
     const params = Array.from(document.querySelectorAll(".param:not([data-index])")).reduce((acc, next) => {
       // copy accumulator into local object
       let obj = acc;
@@ -66,14 +78,20 @@ let preview = {
       }
     }
     params.lines = mergeLines(lineInputs, params.separator);
-    // function to URI encode string but keep semicolons as ';' and spaces as '+'
-    const encode = (str) => {
-      return encodeURIComponent(str).replace(/%3B/g, ";").replace(/%20/g, "+");
-    };
+    return params;
+  },
+
+  /**
+   * Update the preview image and markdown
+   */
+  update() {
+    const copyButtons = document.querySelectorAll(".copy-button");
+    // get parameter values
+    const params = this.getParams();
     // convert parameters to query string
     const query = Object.keys(params)
       .filter((key) => params[key] !== this.defaults[key]) // skip if default value
-      .map((key) => encode(key) + "=" + encode(params[key])) // encode keys and values
+      .map((key) => this.customEncode(key) + "=" + this.customEncode(params[key])) // encode keys and values
       .join("&"); // join lines with '&' delimiter
     // generate links and markdown
     const imageURL = `${window.location.origin}?${query}`;
@@ -96,45 +114,70 @@ let preview = {
     htmlElement.innerText = html;
     // disable copy button if no lines are filled in
     copyButtons.forEach((el) => (el.disabled = !params.lines.length));
+    // update URL to match parameters
+    this.openPermalink();
   },
-  addLine: function () {
-    const parent = document.querySelector(".lines");
-    const index = parent.querySelectorAll("input").length + 1;
-    // label
-    const label = document.createElement("label");
-    label.innerText = `Line ${index}`;
-    label.setAttribute("for", `line-${index}`);
-    label.dataset.index = index;
-    // line input box
-    const input = document.createElement("input");
-    input.className = "param";
-    input.type = "text";
-    input.id = `line-${index}`;
-    input.name = `line-${index}`;
-    input.placeholder = "Enter text here";
-    input.value = this.dummyText[(index - 1) % this.dummyText.length];
-    input.dataset.index = index;
-    // removal button
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "delete-line btn";
-    deleteButton.setAttribute("onclick", "return preview.removeLine(this.dataset.index);");
-    deleteButton.innerHTML =
-      '<svg stroke="currentColor" fill="currentColor"  stroke-width="0" viewBox="0 0 1024 1024" height="0.85em" width="0.85em" xmlns="http://www.w3.org/2000/svg"> <path d="M360 184h-8c4.4 0 8-3.6 8-8v8h304v-8c0 4.4 3.6 8 8 8h-8v72h72v-80c0-35.3-28.7-64-64-64H352c-35.3 0-64 28.7-64 64v80h72v-72zm504 72H160c-17.7 0-32 14.3-32 32v32c0 4.4 3.6 8 8 8h60.4l24.7 523c1.6 34.1 29.8 61 63.9 61h454c34.2 0 62.3-26.8 63.9-61l24.7-523H888c4.4 0 8-3.6 8-8v-32c0-17.7-14.3-32-32-32zM731.3 840H292.7l-24.2-512h487l-24.2 512z"> </path> </svg>';
-    deleteButton.dataset.index = index;
 
-    // add elements
-    parent.appendChild(label);
-    parent.appendChild(input);
-    parent.appendChild(deleteButton);
+  /**
+   * Encode a string for use in a URL but keep semicolons as ';' and spaces as '+'
+   * @param {string} str The string to encode
+   * @returns The encoded string
+   */
+  customEncode(str) {
+    return encodeURIComponent(str).replace(/%3B/g, ";").replace(/%20/g, "+");
+  },
 
-    // disable button if only 1
-    parent.querySelector(".delete-line.btn").disabled = index == 1;
+  /**
+   * Add new line input fields
+   * @param {number} count The number of lines to add
+   * @returns {false} Always returns false to prevent form submission
+   */
+  addLines(count) {
+    for (let i = 0; i < count; i++) {
+      const parent = document.querySelector(".lines");
+      const index = parent.querySelectorAll("input").length + 1;
+      // label
+      const label = document.createElement("label");
+      label.innerText = `Line ${index}`;
+      label.setAttribute("for", `line-${index}`);
+      label.dataset.index = index;
+      // line input box
+      const input = document.createElement("input");
+      input.className = "param";
+      input.type = "text";
+      input.id = `line-${index}`;
+      input.name = `line-${index}`;
+      input.placeholder = "Enter text here";
+      input.value = this.dummyText[(index - 1) % this.dummyText.length];
+      input.dataset.index = index;
+      // removal button
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "delete-line btn";
+      deleteButton.setAttribute("onclick", "return preview.removeLine(this.dataset.index);");
+      deleteButton.innerHTML =
+        '<svg stroke="currentColor" fill="currentColor"  stroke-width="0" viewBox="0 0 1024 1024" height="0.85em" width="0.85em" xmlns="http://www.w3.org/2000/svg"> <path d="M360 184h-8c4.4 0 8-3.6 8-8v8h304v-8c0 4.4 3.6 8 8 8h-8v72h72v-80c0-35.3-28.7-64-64-64H352c-35.3 0-64 28.7-64 64v80h72v-72zm504 72H160c-17.7 0-32 14.3-32 32v32c0 4.4 3.6 8 8 8h60.4l24.7 523c1.6 34.1 29.8 61 63.9 61h454c34.2 0 62.3-26.8 63.9-61l24.7-523H888c4.4 0 8-3.6 8-8v-32c0-17.7-14.3-32-32-32zM731.3 840H292.7l-24.2-512h487l-24.2 512z"> </path> </svg>';
+      deleteButton.dataset.index = index;
+
+      // add elements
+      parent.appendChild(label);
+      parent.appendChild(input);
+      parent.appendChild(deleteButton);
+
+      // disable button if only 1
+      parent.querySelector(".delete-line.btn").disabled = index == 1;
+    }
 
     // update and exit
     this.update();
     return false;
   },
-  removeLine: function (index) {
+
+  /**
+   * Remove a line input field
+   * @param {number} index The index of the line to remove
+   * @returns {false} Always returns false to prevent form submission
+   */
+  removeLine(index) {
     index = Number(index);
     const parent = document.querySelector(".lines");
     // remove all elements for given property
@@ -173,16 +216,16 @@ let preview = {
     this.update();
     return false;
   },
-  reset: function () {
-    const overrides = {
-      font: "Fira Code",
-      pause: "1000",
-      width: "435",
-    };
+
+  /**
+   * Reset all input fields to their initial values
+   * @returns {false} Always returns false to prevent form submission
+   */
+  reset() {
     // reset all inputs
     const inputs = document.querySelectorAll(".param");
     inputs.forEach((input) => {
-      let value = overrides[input.name] || this.defaults[input.name];
+      let value = this.overrides[input.name] || this.defaults[input.name];
       if (value) {
         if (["color", "background"].includes(input.name)) {
           input.jscolor.fromString(value);
@@ -192,28 +235,97 @@ let preview = {
       }
     });
   },
-};
 
-let clipboard = {
-  copy: function (el) {
-    // create input box to copy from
-    const input = document.createElement("input");
-    input.value = el.parentElement.querySelector("code").innerText;
-    document.body.appendChild(input);
-    // select all
-    input.select();
-    input.setSelectionRange(0, 99999);
-    // copy
-    document.execCommand("copy");
-    // remove input box
-    input.parentElement.removeChild(input);
-    // set tooltip text
-    el.title = "Copied!";
+  /**
+   * Get the current parameters in a permalink format
+   * @returns {string} The permalink URL
+   */
+  getPermalink() {
+    // get parameters from form
+    const params = this.getParams();
+    // convert parameters to query string
+    const defaultInputs = { ...this.defaults, ...this.overrides };
+    defaultInputs.lines = this.dummyText[0];
+    const query = Object.keys(params)
+      .filter((key) => params[key] !== defaultInputs[key]) // skip if default value
+      .map((key) => this.customEncode(key) + "=" + this.customEncode(params[key])) // encode keys and values
+      .join("&"); // join lines with '&' delimiter
+    // return permalink
+    return `${window.location.origin}${window.location.pathname}` + (query ? `?${query}` : "");
+  },
+
+  /**
+   * Save the current parameters to the URL
+   */
+  openPermalink() {
+    window.history.replaceState({}, "", this.getPermalink());
+  },
+
+  /**
+   * Restore the last saved parameters from the URL
+   */
+  restore() {
+    // get parameters from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const params = { ...this.defaults, ...this.overrides, ...Object.fromEntries(urlParams) };
+    // set all parameters
+    const inputs = document.querySelectorAll(".param");
+    inputs.forEach((input) => {
+      let value = params[input.name];
+      if (value) {
+        if (["color", "background"].includes(input.name)) {
+          input.jscolor.fromString(value);
+        } else {
+          input.value = value;
+        }
+      }
+    });
+    // add lines
+    const lines = params.lines || this.dummyText[0];
+    const lineInputs = lines.split(params.separator);
+    this.addLines(lineInputs.length);
+    lineInputs.forEach((line, index) => {
+      document.querySelector(`#line-${index + 1}`).value = line;
+    });
   },
 };
 
-let tooltip = {
-  reset: function (el) {
+const clipboard = {
+  /**
+   * Copy text to the clipboard
+   * @param {HTMLElement} btn The element that was clicked
+   * @param {String} text The text to copy
+   */
+  copy(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      // set tooltip text
+      btn.title = "Copied!";
+    });
+  },
+
+  /**
+   * Copy the text from a code block to the clipboard
+   * @param {HTMLElement} btn The element that was clicked
+   */
+  copyCode(btn) {
+    this.copy(btn, btn.parentElement.querySelector("code").innerText);
+  },
+
+  /**
+   * Copy the permalink to the clipboard
+   * @param {HTMLElement} btn The element that was clicked
+   */
+  copyPermalink(btn) {
+    this.copy(btn, preview.getPermalink());
+  },
+};
+
+const tooltip = {
+  /**
+   * Reset the tooltip text
+   * @param {HTMLElement} el The element that was clicked
+   */
+  reset(el) {
     // remove tooltip text
     el.removeAttribute("title");
   },
@@ -233,9 +345,8 @@ document.querySelector(".show-border input").addEventListener("change", function
 window.addEventListener(
   "load",
   () => {
-    // add first line
-    preview.addLine();
-    preview.update();
+    preview.restore(); // restore parameters
+    preview.update(); // update preview
   },
   false
 );

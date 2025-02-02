@@ -52,8 +52,14 @@ class RendererModel
     /** @var string $separator Line separator */
     public $separator;
 
+    /** @var bool $random True = Sort lines in random order */
+    public $random;
+
     /** @var string $fontCSS CSS required for displaying the selected font */
     public $fontCSS;
+
+    /** @var string $letterSpacing Letter spacing */
+    public $letterSpacing;
 
     /** @var string $template Path to template file */
     public $template;
@@ -74,6 +80,8 @@ class RendererModel
         "pause" => "0",
         "repeat" => "true",
         "separator" => ";",
+        "random" => "false",
+        "letterSpacing" => "normal",
     ];
 
     /**
@@ -86,6 +94,7 @@ class RendererModel
     {
         $this->template = $template;
         $this->separator = $params["separator"] ?? $this->DEFAULTS["separator"];
+        $this->random = $this->checkBoolean($params["random"] ?? $this->DEFAULTS["random"]);
         $this->lines = $this->checkLines($params["lines"] ?? "");
         $this->font = $this->checkFont($params["font"] ?? $this->DEFAULTS["font"]);
         $this->weight = $this->checkNumberPositive($params["weight"] ?? $this->DEFAULTS["weight"], "Font weight");
@@ -101,6 +110,7 @@ class RendererModel
         $this->pause = $this->checkNumberNonNegative($params["pause"] ?? $this->DEFAULTS["pause"], "pause");
         $this->repeat = $this->checkBoolean($params["repeat"] ?? $this->DEFAULTS["repeat"]);
         $this->fontCSS = $this->fetchFontCSS($this->font, $this->weight, $params["lines"]);
+        $this->letterSpacing = $this->checkLetterSpacing($params["letterSpacing"] ?? $this->DEFAULTS["letterSpacing"]);
     }
 
     /**
@@ -112,12 +122,15 @@ class RendererModel
     private function checkLines($lines)
     {
         if (!$lines) {
-            throw new InvalidArgumentException("Lines parameter must be set.");
+            throw new UnprocessableEntityException("Lines parameter must be set.");
         }
         if (strlen($this->separator) === 1) {
             $lines = rtrim($lines, $this->separator);
         }
         $exploded = explode($this->separator, $lines);
+        if ($this->random) {
+            shuffle($exploded);
+        }
         // escape special characters to prevent code injection
         return array_map("htmlspecialchars", $exploded);
     }
@@ -163,7 +176,7 @@ class RendererModel
     {
         $digits = intval(preg_replace("/[^0-9\-]/", "", $num));
         if ($digits <= 0) {
-            throw new InvalidArgumentException("$field must be a positive number.");
+            throw new UnprocessableEntityException("$field must be a positive number.");
         }
         return $digits;
     }
@@ -179,7 +192,7 @@ class RendererModel
     {
         $digits = intval(preg_replace("/[^0-9\-]/", "", $num));
         if ($digits < 0) {
-            throw new InvalidArgumentException("$field must be a non-negative number.");
+            throw new UnprocessableEntityException("$field must be a non-negative number.");
         }
         return $digits;
     }
@@ -215,5 +228,44 @@ class RendererModel
         }
         // font is not found
         return "";
+    }
+
+    /**
+     * Validate unit for size properties
+     *
+     * This method validates if the given unit is a valid CSS size unit.
+     * It supports various units such as px, em, rem, pt, pc, in, cm, mm,
+     * ex, ch, vh, vw, vmin, vmax, and percentages.
+     *
+     * @param string $unit Unit for validation
+     * @return bool True if valid, false otherwise
+     */
+    private function isValidUnit($unit)
+    {
+        return (bool) preg_match("/^(-?\\d+(\\.\\d+)?(px|em|rem|pt|pc|in|cm|mm|ex|ch|vh|vw|vmin|vmax|%))$/", $unit);
+    }
+
+    /**
+     * Validate letter spacing
+     *
+     * This method validates the letter spacing property for fonts.
+     * It allows specific keywords (normal, inherit, initial, revert, revert-layer, unset)
+     * and valid CSS size units.
+     *
+     * @param string $letterSpacing Letter spacing for validation
+     * @return string Validated letter spacing
+     */
+    private function checkLetterSpacing($letterSpacing)
+    {
+        // List of valid keywords for letter-spacing
+        $keywords = "normal|inherit|initial|revert|revert-layer|unset";
+
+        // Check if the input matches one of the keywords or a valid unit
+        if (preg_match("/^($keywords)$/", $letterSpacing) || $this->isValidUnit($letterSpacing)) {
+            return $letterSpacing;
+        }
+
+        // Return the default letter spacing value if the input is invalid
+        return $this->DEFAULTS["letterSpacing"];
     }
 }
